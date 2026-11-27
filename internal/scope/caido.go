@@ -116,6 +116,9 @@ func caidoGlob(t Target, inScope bool) (string, string) {
 // doesn't accept.
 func caidoHost(h string) (string, string) {
 	h = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(h)), ".")
+	if !idnaSized(h) {
+		return "", "a hostname Caido can't take"
+	}
 	labels := strings.Split(h, ".")
 	for i, l := range labels {
 		if strings.ContainsAny(l, "*?") || isASCII(l) {

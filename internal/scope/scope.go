@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
@@ -349,6 +350,9 @@ var labelRE = regexp.MustCompile(`^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$`)
 // be on the public suffix list.
 func normaliseHost(host string, strict bool) (string, bool) {
 	h := strings.ToLower(strings.TrimSuffix(host, "."))
+	if !idnaSized(h) {
+		return "", false
+	}
 	if a, err := idna.Lookup.ToASCII(h); err == nil {
 		h = a
 	} else if !isASCII(h) {
@@ -389,6 +393,29 @@ func apexOf(h string) string {
 		return ""
 	}
 	return a
+}
+
+// IDNA bounds, in characters: four times what DNS allows (63 a label, 253
+// a name), so nothing that maps to a valid name is turned away, while the
+// conversion, whose punycode step grows with the square of a label's
+// length, stays cheap on input anyone can send (a 40,000-character line
+// took seconds).
+const (
+	idnaMaxLabel = 4 * 63
+	idnaMaxName  = 4 * 253
+)
+
+// idnaSized reports whether h is short enough to convert.
+func idnaSized(h string) bool {
+	if utf8.RuneCountInString(h) > idnaMaxName {
+		return false
+	}
+	for l := range strings.SplitSeq(h, ".") {
+		if utf8.RuneCountInString(l) > idnaMaxLabel {
+			return false
+		}
+	}
+	return true
 }
 
 func isASCII(s string) bool {

@@ -3,7 +3,9 @@ package scope
 import (
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestTargets(t *testing.T) {
@@ -257,5 +259,44 @@ func TestHiddenName(t *testing.T) {
 		if got := HiddenName(in); got != want {
 			t.Errorf("HiddenName(%q) = %v", in, got)
 		}
+	}
+}
+
+// A long line of distinct non-ASCII characters is refused before the IDNA
+// conversion, whose cost grows with the square of a label's length: it
+// took seconds before the bound. Names up to the DNS limits still convert.
+func TestNormaliseHostIDNABound(t *testing.T) {
+	var long []rune
+	for c := rune(0x3400); len(long) < 40000; c++ {
+		long = append(long, c)
+	}
+	label63 := strings.Repeat("ü", 63)
+	tests := []struct {
+		name, host string
+		want       bool
+	}{
+		{"idn", "bücher.example.com", true},
+		{"idn label at 63 runes", label63 + ".example.com", false}, // valid runes, too long once encoded
+		{"40k distinct runes", string(long), false},
+		{"40k runes then a domain", string(long) + ".example.com", false},
+		{"long label among short ones", "a." + strings.Repeat("ü", idnaMaxLabel+1) + ".example.com", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start := time.Now()
+			_, ok := normaliseHost(tt.host, false)
+			if ok != tt.want {
+				t.Errorf("normaliseHost ok = %v, want %v", ok, tt.want)
+			}
+			if d := time.Since(start); d > 2*time.Second {
+				t.Errorf("took %v", d)
+			}
+		})
+	}
+	if !idnaSized(strings.Repeat("ü", idnaMaxLabel)+".example") || idnaSized(strings.Repeat("a.", idnaMaxName)) {
+		t.Error("idnaSized bounds wrong")
+	}
+	if _, why := caidoHost(string(long)); why == "" {
+		t.Error("caidoHost took a 40k-character name")
 	}
 }

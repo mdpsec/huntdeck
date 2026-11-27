@@ -5,6 +5,13 @@ the API under `/api/v1` and `/api/v2`, the configuration variables and the
 database (upgraded in place on start) stay compatible within a major
 version.
 
+## v1.3.1 (2026-11-27)
+
+- Scope checks refuse a name too long to be a hostname before converting it
+  from international characters, instead of after: a single long line sent
+  to `POST /api/v1/match` (or the Match page) could keep a CPU busy for tens
+  of seconds. Real names, international ones included, match as before.
+
 ## v1.3.0 (2026-11-25)
 
 - Email › HuntMail › Overview lists the **top senders** of the last 7 days
